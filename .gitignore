@@ -1,0 +1,9 @@
+# Ignore weights and checkpoints
+DF40/weights/
+dfdc_deepfake_challenge/weights/
+dfdc_deepfake_challenge/test_videos/
+image_text/models/
+SimSwap/checkpoints/
+SimSwap/arcface_model/
+
+
