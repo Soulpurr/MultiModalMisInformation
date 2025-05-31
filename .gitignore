@@ -1,9 +1,21 @@
-# Ignore weights and checkpoints
-DF40/weights/
-dfdc_deepfake_challenge/weights/
-dfdc_deepfake_challenge/test_videos/
-image_text/models/
-SimSwap/checkpoints/
-SimSwap/arcface_model/
+# Ignore all contents in these folders
+DF40/weights/*
+!DF40/weights/.gitkeep
 
+dfdc_deepfake_challenge/weights/*
+!dfdc_deepfake_challenge/weights/.gitkeep
 
+dfdc_deepfake_challenge/test_videos/*
+!dfdc_deepfake_challenge/test_videos/.gitkeep
+
+image_text/models/*
+!image_text/models/.gitkeep
+
+image_text/images/*
+!image_text/images/.gitkeep
+
+SimSwap/checkpoints/*
+!SimSwap/checkpoints/.gitkeep
+
+SimSwap/arcface_model/*
+!SimSwap/arcface_model/.gitkeep

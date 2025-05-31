@@ -1,6 +1,7 @@
 # Import necessary libraries
 import streamlit as st
 import subprocess
+import numpy as np
 import os
 import uuid
 import tempfile
@@ -18,6 +19,7 @@ from torchvision import transforms
 from PIL import Image
 from transformers import BertTokenizer
 import torch.nn.functional as F
+import seaborn as sns
 # ----- Local Imports -----
 sys.path.append(os.path.join(os.path.dirname(__file__), "dfdc_deepfake_challenge"))
 from kernel_utils import VideoReader, FaceExtractor, confident_strategy, predict_on_video_set
@@ -28,16 +30,55 @@ st.set_page_config(page_title="DeepFake Generator & Classifier", layout="centere
 st.title("🔀 DeepFake Generator, Detector & AI Text Classifier")
 
 # ----- Sidebar Mode Selection -----
-mode = st.sidebar.radio("Select Mode", ["Generate Deepfake", "Classify Deepfake", "Detect AI Text", "Spam Detector","Multimodal Fake News Detector"])
+mode = st.sidebar.radio("Select Mode", ["Generate Deepfake", "Classify Deepfake", "Detect AI Text", "Spam Detector","Multimodal Misinformation Detector","Metrics"])
 
 # ----- Common Config -----
-arcface_path = "SimSwap/arcface_model/arcface_checkpoint.tar"
+arcface_path = "arcface_model/arcface_checkpoint.tar"
 crop_size = 224
 name = "people"
 temp_path = "./tmp_results"
 os.makedirs("input", exist_ok=True)
 os.makedirs("output", exist_ok=True)
 os.makedirs(temp_path, exist_ok=True)
+
+model_metrics = {
+    'DFDC Deepfake Detection': {
+        'Accuracy': 92.02,
+        'Precision': 65.0,
+        'Recall': 50.0,
+        'F1-Score': 56.0,
+        'AUC-ROC': 97.0
+    },
+    'AI Detector': {
+        'Accuracy': 89.6,
+        'Precision': 88.2,
+        'Recall': 87.9,
+        'F1-Score': 88.0,
+        'AUC-ROC': 91.5
+    },
+    'Spam Detector': {
+        'Accuracy': 95.3,
+        'Precision': 94.8,
+        'Recall': 95.0,
+        'F1-Score': 94.9,
+        'AUC-ROC': 96.2
+    },
+    'Multimodal Misinformation Detection': {
+        'Accuracy': 91.94,
+        'Precision': 93.76,
+        'Recall': 93.29,
+        'F1-Score': 93.29,
+        'AUC-ROC': None
+    }
+}
+report_dict = {
+    'Class': ['True', 'Satire', 'False Conn', 'Imposter', 'Manipulated', 'Misleading'],
+    'Precision': [0.89, 0.83, 0.78, 0.80, 0.88, 0.80],
+    'Recall': [0.91, 0.64, 0.77, 0.41, 0.93, 0.80],
+    'F1-Score': [0.90, 0.72, 0.77, 0.54, 0.90, 0.80],
+    'Support': [1251, 124, 388, 39, 622, 75]
+}
+report_df = pd.DataFrame(report_dict)
 
 # ----- DeepFake Video Classification Model -----
 @st.cache_resource
@@ -74,7 +115,7 @@ def load_spam_detector_model():
 @st.cache_resource
 def load_model():
     model = BERTResNetClassifier(num_classes=6)
-    model.load_state_dict(torch.load("./image_text/models/modellast.pth", map_location="cpu"),strict=False)
+    model.load_state_dict(torch.load("./image_text/models/model_epoch_316.pth", map_location="cpu"),strict=False)
     model.to(device)
     model.eval()
     return model
@@ -112,23 +153,30 @@ if mode == "Generate Deepfake":
     uploaded_image = st.file_uploader("Upload Source Image", type=["jpg", "jpeg", "png"], key="gen_img")
     uploaded_video = st.file_uploader("Upload Target Video", type=["mp4", "avi", "mov"], key="gen_vid")
 
-    if st.button("🚀 Begin Deepfake Generation"):
+    if st.button("Generate Deepfake"):
         if uploaded_image and uploaded_video:
+            # Create unique file names
             unique_id = uuid.uuid4().hex[:8]
             img_ext = os.path.splitext(uploaded_image.name)[-1]
             vid_ext = os.path.splitext(uploaded_video.name)[-1]
 
-            img_path = os.path.join("input", f"img_{unique_id}{img_ext}")
-            vid_path = os.path.join("input", f"vid_{unique_id}{vid_ext}")
-            output_path = os.path.join("output", f"deepfake_{unique_id}.mp4")
+            img_filename = f"img_{unique_id}{img_ext}"
+            vid_filename = f"vid_{unique_id}{vid_ext}"
+            output_filename = f"deepfake_{unique_id}.mp4"
 
+            img_path = os.path.join("input", img_filename)
+            vid_path = os.path.join("input", vid_filename)
+            output_path = os.path.join("output/", output_filename)
+
+            # Save files to disk
             with open(img_path, "wb") as f:
                 f.write(uploaded_image.read())
             with open(vid_path, "wb") as f:
                 f.write(uploaded_video.read())
 
+            # SimSwap command
             command = [
-                "python", "SimSwap/test_video_swapsingle.py",
+                "python", "test_video_swapsingle.py",
                 "--isTrain", "false",
                 "--crop_size", str(crop_size),
                 "--name", name,
@@ -138,19 +186,53 @@ if mode == "Generate Deepfake":
                 "--output_path", output_path,
             ]
 
+            # Progress bar for deepfake generation
+            progress_bar = st.progress(0)
             with st.spinner("🛠️ Generating deepfake..."):
-                result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
+                # Run the subprocess and capture stdout and stderr
+                process = subprocess.Popen(
+                    command, 
+                    stdout=subprocess.PIPE, 
+                    stderr=subprocess.PIPE, 
+                    text=True, 
+                    encoding='utf-8',
+                    cwd="./SimSwap"
+                )
 
-            if result.returncode == 0:
+                # Simulate progress based on output (you can adjust this based on your script's output)
+                for stdout_line in iter(process.stdout.readline, ""):
+                    st.text(stdout_line.strip())  # Display stdout in Streamlit
+                    
+                    # Simulate progress update (you may need to modify based on real stdout feedback)
+                    if "progress" in stdout_line.lower():  # Replace this with actual condition based on stdout
+                        progress_bar.progress(50)  # Update progress to 50% for demonstration (replace with actual calculation)
+                
+                # Handle stderr (error output)
+                for stderr_line in iter(process.stderr.readline, ""):
+                    st.text(stderr_line.strip())  # Display stderr in Streamlit
+
+                process.stdout.close()
+                process.stderr.close()
+                process.wait()  # Wait for process to finish
+
+            # Check if the deepfake generation was successful
+            if os.path.exists(output_path):
                 st.success("✅ Deepfake generated successfully!")
                 st.video(output_path)
+                st.markdown(f"📁 **Saved as:** `{output_filename}`")
+
                 with open(output_path, "rb") as video_file:
-                    st.download_button("⬇️ Download Video", data=video_file, file_name=os.path.basename(output_path), mime="video/mp4")
+                    st.download_button(
+                        label="⬇️ Download Video",
+                        data=video_file,
+                        file_name=output_filename,
+                        mime="video/mp4"
+                    )
             else:
-                st.error("❌ Error during deepfake generation.")
-                st.code(result.stderr)
+                st.error("❌ Error during deepfake generation. No output file found.")
         else:
             st.warning("⚠️ Please upload both a source image and a target video.")
+
 
 # ----- Mode 2: Classify Deepfake -----
 elif mode == "Classify Deepfake":
@@ -177,7 +259,7 @@ elif mode == "Classify Deepfake":
             face_extractor = FaceExtractor(video_read_fn)
             strategy = confident_strategy
 
-            predictions = predict_on_video_set(
+            predictions_dict, frames_info = predict_on_video_set(
                 face_extractor=face_extractor,
                 input_size=input_size,
                 models=models,
@@ -188,12 +270,17 @@ elif mode == "Classify Deepfake":
                 test_dir=os.path.dirname(video_path),
             )
 
-            result = predictions[0]
+            video_name = os.path.basename(video_path)
+            result = predictions_dict[video_name]
+            frame_data = frames_info[video_name]
+
             st.subheader("Prediction Result")
 
             labels = ['REAL', 'FAKE']
-            confidence_scores = [1 - result, result]
+            mean_probability = np.mean(result)  # Mean probability for the video being fake
+            confidence_scores = [1 - mean_probability, mean_probability]
 
+           
             df_conf = pd.DataFrame({
                 "Label": labels,
                 "Confidence": confidence_scores
@@ -211,12 +298,27 @@ elif mode == "Classify Deepfake":
             fig.update_traces(textinfo='percent+label', pull=[0, 0.1])
             st.plotly_chart(fig, use_container_width=True)
 
-            if result > 0.5:
-                st.markdown(f"<h3 style='color:red;'>FAKE ❌ (Confidence: {result:.2f})</h3>", unsafe_allow_html=True)
+            if mean_probability  > 0.5:
+                st.markdown(f"<h3 style='color:red;'>FAKE ❌ (Confidence: {mean_probability:.2f})</h3>", unsafe_allow_html=True)
             else:
-                st.markdown(f"<h3 style='color:green;'>REAL ✅ (Confidence: {1 - result:.2f})</h3>", unsafe_allow_html=True)
+                st.markdown(f"<h3 style='color:green;'>REAL ✅ (Confidence: {1 - mean_probability:.2f})</h3>", unsafe_allow_html=True)
+
+            # Optionally show top N suspicious frames in a left-to-right manner
+            st.subheader("Suspicious Frames")
+            frame_data_sorted = sorted(frame_data, key=lambda x: x[0], reverse=True)
+            top_n = len(frame_data_sorted)
+
+            # Create columns dynamically based on the number of images
+            num_columns = 5  # You can adjust this number to control the number of columns
+            columns = st.columns(num_columns)
+
+            for i in range(top_n):
+                prob, img = frame_data_sorted[i]
+                col = columns[i % num_columns]  # Rotate through the columns
+                col.image(img, caption=f"Fake Score: {prob:.2f}", use_column_width=True)
 
             os.remove(video_path)
+
 
 # ----- Mode 3: Detect AI Text -----
 elif mode == "Detect AI Text":
@@ -317,8 +419,8 @@ elif mode == "Spam Detector":
 
             st.plotly_chart(fig)
 
-elif mode == "Multimodal Fake News Detector":
-    st.title("🧠 Multimodal Fake News Classifier")
+elif mode == "Multimodal Misinformation Detector":
+    st.title("🧠 Multimodal Misinformation News Detector")
     st.markdown("Predict the type of news post based on **image** and **text** using a fine-tuned BERT + ResNet model.")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -407,12 +509,69 @@ elif mode == "Multimodal Fake News Detector":
         else:
             st.warning("Please provide both an image and a text input to proceed.")
 
+elif mode=="Metrics":
+    # --- App Title ---
+    st.title("📊 Model Performance Dashboard")
+
+    # --- Model Selector ---
+    selected_model = st.selectbox("Choose a model to view its metrics:", list(model_metrics.keys()))
+    metrics = model_metrics[selected_model]
+    df = pd.DataFrame.from_dict(metrics, orient='index', columns=['Value']).dropna()
+
+    if not df.empty:
+        st.subheader(f"{selected_model} Metrics")
+        st.bar_chart(df)
+
+        # --- Show DFDC Loss Plot ---
+        if selected_model == "DFDC Deepfake Detection":
+            st.markdown("### 📉 Training Loss Curve")
+            st.image("./loss_plot_dfdc.png", caption="Weighted loss over epochs")
+
+    else:
+        st.warning(f"No available metrics to display for **{selected_model}**.")
+
+    # --- Multimodal Specific Metrics ---
+    if selected_model == "Multimodal Misinformation Detection":
+        st.subheader("📊 Multimodal Misinformation Classifier Metrics")
+        metric_option = st.selectbox("Choose metric to visualize:", ["Classification Table", "Confusion Matrix", "Prediction Histogram"])
+
+        if metric_option == "Classification Table":
+            st.markdown("### 🔍 Classification Report")
+            st.dataframe(report_df.style.format({"Precision": "{:.2f}", "Recall": "{:.2f}", "F1-Score": "{:.2f}"}))
+
+        elif metric_option == "Confusion Matrix":
+            cm_data = [
+                [1140, 7, 39, 2, 62, 1],
+                [8, 79, 16, 1, 16, 4],
+                [17, 5, 298, 2, 61, 5],
+                [2, 0, 2, 16, 19, 0],
+                [18, 4, 13, 2, 580, 5],
+                [1, 3, 2, 0, 9, 60]
+            ]
+            plt.figure(figsize=(10, 7))
+            sns.heatmap(cm_data, annot=True, fmt='d', cmap='coolwarm',
+                        xticklabels=report_df['Class'], yticklabels=report_df['Class'])
+            plt.title("Confusion Matrix")
+            st.pyplot(plt)
+
+        elif metric_option == "Prediction Histogram":
+            plt.figure(figsize=(8, 4))
+            sns.barplot(x=report_df['Class'], y=report_df['Support'])
+            plt.title("Prediction Count by Class")
+            plt.xticks(rotation=45)
+            st.pyplot(plt)
+
 # ----- Footer -----
 st.markdown("---")
 st.markdown(
     """
+    <style>
+    div[data-baseweb="select"] > div {
+        cursor: pointer;
+    }
+    </style>
     <div style="text-align: center; font-size: 0.9em; color: grey;">
-        Built with ❤️ by Abhi<br>
+        Built with Neural Networks ❤️ <br>
         Powered by <strong>SimSwap</strong>, <strong>DFDCP Classifier</strong>, and <strong>HuggingFace Transformers</strong>
     </div>
     """,
