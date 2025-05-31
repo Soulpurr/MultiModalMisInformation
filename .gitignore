@@ -14,6 +14,8 @@ image_text/models/*
 image_text/images/*
 !image_text/images/.gitkeep
 
+ai_detector/model.safetensors/
+
 SimSwap/checkpoints/*
 !SimSwap/checkpoints/.gitkeep
 
