@@ -1,0 +1,2 @@
+python test_one_image.py --isTrain false --crop_size 224 --name people --Arc_path arcface_model/arcface_checkpoint.tar --pic_a_path images/bp.jpg --pic_b_path images/vp.jpg --output_path ./output/
+python test_video_swapsingle.py --isTrain false --crop_size 224 --name people --Arc_path arcface_model/arcface_checkpoint.tar --pic_a_path ./images/vp.jpg --video_path ./images/vid3.mp4 --output_path ./output/res1.mp4
