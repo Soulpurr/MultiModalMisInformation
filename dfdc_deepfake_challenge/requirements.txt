@@ -1,0 +1,14 @@
+torch==1.10.0
+facenet-pytorch
+albumentations==1.0.0
+timm==0.4.12
+pytorch-toolbelt
+tensorboardx
+cython
+jupyter
+jupyterlab
+ipykernel
+matplotlib
+tqdm
+pandas
+dlib
