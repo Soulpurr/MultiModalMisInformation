@@ -1,6 +1,5 @@
 # Ignore all contents in these folders
-DF40/weights/*
-!DF40/weights/.gitkeep
+DF40/
 
 dfdc_deepfake_challenge/weights/*
 !dfdc_deepfake_challenge/weights/.gitkeep
